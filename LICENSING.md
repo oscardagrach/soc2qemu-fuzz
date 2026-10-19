@@ -19,6 +19,10 @@ This license covers this repository: `gen.py`, `fuzz.sh`, `selftest.sh`, `tools/
 `fuzzer/`, and `targets/`. Parts of `fuzzer/src/main.rs` are adapted from LibAFL, used under
 its MIT license option; see [NOTICE](NOTICE).
 
+One exception: `qemu/soc2qemu-fuzz-mmio.c` is compiled into QEMU, so the GPL-3.0 option for it
+is `GPL-2.0-or-later` (QEMU's license for new device code), as its header says. The
+commercial option applies to it as to the rest.
+
 It does not cover:
 
 - **QEMU.** libafl_qemu compiles QEMU (mostly GPL-2.0-or-later) into the fuzzer binary, so

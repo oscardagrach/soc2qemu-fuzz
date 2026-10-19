@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Buffer-mode full-system fuzzer for soc2qemu ports, driven by a generated harness.toml.
+//! Full-system fuzzer for soc2qemu ports, driven by a generated harness.toml.
 //!
-//! Snapshot at `target.start`, write each input to `target.input`, run until `target.end`
-//! (ok) or any other stop (crash; `target.crashes` are breakpoints on known fault paths).
+//! Snapshot at `target.start`, deliver each input, run until `target.end` (ok) or any other
+//! stop (crash; `target.crashes` are breakpoints on known fault paths). Input delivery:
+//! - buffer mode: the input is written to RAM at `target.input`.
+//! - mmio mode: the input is written to the window of the `soc2qemu-fuzz-mmio` QEMU device
+//!   (`target.mmio_buf`), which answers firmware reads of one peripheral with it. Running out
+//!   of input ends the run cleanly (SyncExit).
 //! Crashes are deduplicated by signature (see `Signature`): only the first input per
 //! signature is saved.
 //!
@@ -64,9 +68,36 @@ struct Target {
     start: u64,
     end: u64,
     crashes: Vec<u64>,
+    /// "buffer" (default) or "mmio".
+    #[serde(default)]
+    mode: String,
+    /// Buffer mode: RAM address of the input buffer.
+    #[serde(default)]
     input: u64,
+    /// MMIO mode: guest-physical address of the device's input window.
+    #[serde(default)]
+    mmio_buf: u64,
     input_max_len: usize,
     timeout_ms: u64,
+}
+
+/// Header of the soc2qemu-fuzz-mmio input window: magic, length, cursor, reserved.
+const MMIO_MAGIC: u32 = 0x4651_3253;
+const MMIO_HDR: usize = 16;
+
+/// Puts one input where the firmware will read it.
+unsafe fn deliver(qemu: Qemu, t: &Target, input: &[u8]) {
+    let buf = &input[..input.len().min(t.input_max_len)];
+    if t.mode == "mmio" {
+        let mut win = Vec::with_capacity(MMIO_HDR + buf.len());
+        win.extend_from_slice(&MMIO_MAGIC.to_le_bytes());
+        win.extend_from_slice(&(buf.len() as u32).to_le_bytes());
+        win.extend_from_slice(&[0u8; 8]);
+        win.extend_from_slice(buf);
+        unsafe { qemu.write_phys_mem(t.mmio_buf as GuestPhysAddr, &win) };
+    } else {
+        unsafe { qemu.write_phys_mem(t.input as GuestPhysAddr, buf) };
+    }
 }
 
 /// Cortex-M Configurable Fault Status Register (UFSR:BFSR:MMFSR).
@@ -228,10 +259,11 @@ impl<'h> Runner<'h> {
         let t = &self.h.target;
         let crash_pcs: Vec<GuestAddr> = t.crashes.iter().map(|&a| a as GuestAddr).collect();
         unsafe {
-            self.qemu.write_phys_mem(t.input as GuestPhysAddr, &input[..input.len().min(t.input_max_len)]);
+            deliver(self.qemu, t, input);
             let exit = self.qemu.run();
             let sig = match &exit {
                 Ok(QemuExitReason::Breakpoint(_)) => classify(self.qemu, self.h, t.end as GuestAddr, &crash_pcs),
+                Ok(QemuExitReason::SyncExit) => Signature::Ok,
                 _ => Signature::Stop { kind: "exit", pc: 0 },
             };
             self.qemu.restore_fast_snapshot(self.snap);
@@ -274,13 +306,14 @@ fn fuzz(h: &Harness, harness_dir: &PathBuf) {
     let start = h.target.start as GuestAddr;
     let end = h.target.end as GuestAddr;
     let crash_pcs: Vec<GuestAddr> = h.target.crashes.iter().map(|&a| a as GuestAddr).collect();
-    let input_addr = h.target.input as GuestPhysAddr;
     let max_len = h.target.input_max_len;
     let timeout = Duration::from_millis(h.target.timeout_ms);
-    println!(
-        "{}: start {start:#x}, end {end:#x}, crashes {crash_pcs:x?}, input {input_addr:#x} ({max_len} bytes)",
-        h.soc
-    );
+    let delivery = if h.target.mode == "mmio" {
+        format!("mmio window {:#x}", h.target.mmio_buf)
+    } else {
+        format!("input {:#x}", h.target.input)
+    };
+    println!("{}: start {start:#x}, end {end:#x}, crashes {crash_pcs:x?}, {delivery} ({max_len} bytes)", h.soc);
 
     let cores = Cores::from_cmdline(&env::var("CORES").unwrap_or_else(|_| "1".into())).unwrap();
     let broker_port: u16 = env::var("BROKER_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(1338);
@@ -329,12 +362,13 @@ fn fuzz(h: &Harness, harness_dir: &PathBuf) {
         let mut harness =
             |emulator: &mut Emulator<_, _, _, _, _, _, _>, _state: &mut _, input: &BytesInput| {
                 let target = input.target_bytes();
-                let buf = &target[..target.len().min(max_len)];
                 unsafe {
-                    qemu.write_phys_mem(input_addr, buf);
+                    deliver(qemu, &h.target, &target[..]);
 
                     let sig = match emulator.qemu().run() {
                         Ok(QemuExitReason::Breakpoint(_)) => classify(qemu, h, end, &crash_pcs),
+                        // soc2qemu-fuzz-mmio ran out of input: the firmware consumed all of it.
+                        Ok(QemuExitReason::SyncExit) => Signature::Ok,
                         Ok(QemuExitReason::Timeout) => {
                             let pc = qemu.cpu_from_index(0).and_then(|c| c.read_reg(Regs::Pc).ok()).map_or(0, |v| v as GuestAddr);
                             Signature::Stop { kind: "timeout", pc }

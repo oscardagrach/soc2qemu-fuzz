@@ -4,7 +4,7 @@ Fuzz firmware on SoCs ported with [soc2qemu](https://github.com/oscardagrach/soc
 libafl_qemu in full-system mode. soc2qemu does the port; this project turns a port plus its
 `fuzz/profile.yaml` into a running fuzzer.
 
-Status: milestone 1 done; the rest is a sketch. Facts about LibAFL below were checked against LibAFL 0.16.1 (and `main`) on 2026-10-18;
+Status: milestones 1 and 2 done; the rest is a sketch. Facts about LibAFL below were checked against LibAFL 0.16.1 (and `main`) on 2026-10-18;
 everything marked **open** is unverified.
 
 ## Inputs
@@ -44,12 +44,11 @@ features):
   - *Buffer mode* (verified pattern): the firmware reads input from a RAM buffer
     (`targets.input_buffer`), written with `write_phys_mem`. Fits parsers, protocol
     handlers, anything fed from a known buffer.
-  - *MMIO mode*: feed fuzz bytes when firmware reads `input_candidates` registers (UART RX,
-    SPI/I2C data, status registers). This is where soc2qemu's data is most useful.
-    **Open:** whether libafl_qemu exposes MMIO read hooks in full-system mode. If not, add a
-    small "fuzz-input" QEMU device to the libafl-based port: it replaces the unimplemented
-    stub at a candidate address and serves bytes from a RAM window the harness fills with
-    `write_phys_mem`. That keeps the harness on the verified API.
+  - *MMIO mode* (milestone 2): feed fuzz bytes when firmware reads `input_candidates`
+    registers (UART RX, SPI/I2C data, status registers). This is where soc2qemu's data is
+    most useful. libafl_qemu 0.16.1's read hooks can't do it: they see the PC and address of a
+    load, not its value, and can't change it. So a small QEMU device does it; see the
+    implementation notes.
 - **Crash oracle:** unexpected stops (fault handlers, `HardFault`/exception vectors, panic
   symbols), watchdog/reset requests, and new QEMU log messages that aren't in
   `baseline_log_messages`. Timeouts become hangs.
@@ -60,7 +59,14 @@ features):
    `selftest-m3-libafl` port + `targets/selftest-m3-buffer` (planted "SOC!" bug). The bug is
    found in about 13 s / ~100k executions at ~7.4k exec/s on one core. A buffer-mode target
    is used instead of soc2qemu's own fixture because that one has no input to fuzz.
-2. MMIO mode on the same fixture: fuzz the `i2s +0x4` register the fixture polls.
+2. **Done (2026-10-19).** MMIO mode: `targets/selftest-m3-mmio` polls `i2s +0x4` like
+   soc2qemu's fixture, then reads a command from `i2s +0x8`, with the same planted bugs as
+   milestone 1. Both are found through the i2s registers at ~7.3k exec/s on one core, but
+   more slowly than in buffer mode: of 6 runs, 3 found both in 34-118 s and 3 missed one
+   within 120-180 s (buffer mode: 3 of 3 within 25-50 s). Status polls and command bytes
+   share one input stream, so mutations that change the poll count move the command; see
+   Next. The self-test gives MMIO mode 360 s. soc2qemu's fixture itself has no bug after the
+   poll, so a target of our own is used again.
 3. A real Cortex-M port, then a Cortex-A port (`aarch64` feature).
 
 ## Implementation notes (milestone 1)
@@ -83,15 +89,37 @@ features):
   client saves its own first copy. Fast snapshot restore resets CFSR between inputs.
   `--triage` applies the same signature by replay.
 
+## Implementation notes (milestone 2)
+
+- `qemu/soc2qemu-fuzz-mmio.c` (`-device soc2qemu-fuzz-mmio,addr=,size=,buf=,buf-size=`): a
+  bus-less, user-creatable device (like `generic-loader`), so no machine code changes. It
+  maps an I/O region over the peripheral at priority 10, above the board's model or
+  unimplemented-device stub, and a RAM input window at `buf`. Realize fails if `buf` is
+  already mapped.
+- Window layout: magic `S2QF`, length, cursor, reserved, then data. The harness writes the
+  whole header per input; the cursor lives in guest RAM, so the device has no state of its own
+  for snapshots to save. Without the magic (boot up to the snapshot point), reads return 0.
+- Reads consume `size` bytes, little-endian; writes are ignored. Reading past the end calls
+  `libafl_exit_request_custom_insn`, which unwinds out of the access (`cpu_loop_exit`) and
+  surfaces as `QemuExitReason::SyncExit`; the harness counts it as a clean end of input.
+  Because the access never returns, the region's re-entrancy guard would stay engaged and
+  every later access would be blocked ("Blocked re-entrant IO", then a BusFault), so the
+  device sets `disable_reentrancy_guard`.
+- `fuzz.sh build` installs the device into the port tree and sets `LIBAFL_QEMU_FORCE_BUILD` to
+  a hash of it: libafl_qemu's build script only reruns QEMU's build when its known sources or
+  its environment variables change.
+- The device file is GPL-2.0-or-later because it is built into QEMU.
+
 ## Next
 
 - Cortex-A signatures (ELR/ESR) with the Cortex-A milestone; PSP for Cortex-M RTOS faults.
+- MMIO mode: per-register streams (today all registers of the peripheral share one stream, so
+  status polls eat input bytes meant for data registers), and more than one peripheral.
 - Crash minimization (saved inputs are whatever the mutator produced, e.g. 59-72 bytes for a
   4-byte trigger).
 
 ## Open questions
 
-- MMIO read hooks in libafl_qemu full-system mode (see above).
 - Cortex-A with a firmware chain: snapshot after DDR init and the MMU is on; TrustZone/EL3 state
   in snapshots.
 - Keeping `QEMU_LIBAFL_REF` in soc2qemu in step with the LibAFL release this project pins.

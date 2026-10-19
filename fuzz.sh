@@ -16,6 +16,15 @@ bin="$target_dir/release/soc2qemu-fuzz"
 
 case "$cmd" in
   build)
+    # MMIO input mode needs qemu/soc2qemu-fuzz-mmio.c in the port's tree (hw/misc, plus one
+    # meson line). Installed for every harness so one build serves both modes.
+    dev="$qemu_dir/hw/misc/soc2qemu-fuzz-mmio.c"
+    cmp -s "$root/qemu/soc2qemu-fuzz-mmio.c" "$dev" || cp "$root/qemu/soc2qemu-fuzz-mmio.c" "$dev"
+    grep -q "soc2qemu-fuzz-mmio.c" "$qemu_dir/hw/misc/meson.build" ||
+      echo "system_ss.add(files('soc2qemu-fuzz-mmio.c'))  # soc2qemu-fuzz" >>"$qemu_dir/hw/misc/meson.build"
+    # libafl_qemu's build script only reruns QEMU's build when its sources or certain variables
+    # change; the device isn't one of its sources until it is built in, so key a variable to it.
+    export LIBAFL_QEMU_FORCE_BUILD="mmio-$(sha256sum "$dev" | cut -c1-16)"
     # libafl_qemu configures and builds QEMU in $qemu_dir/build (soc2qemu builds in build-kit there).
     # CC/CXX: see tools/cc-compat (old QEMU + bundled dtc vs. a newer GCC under -Werror).
     LIBAFL_QEMU_DIR="$qemu_dir" CC="$root/tools/cc-compat" CXX="$root/tools/cxx-compat" \
