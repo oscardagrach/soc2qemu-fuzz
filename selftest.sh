@@ -22,6 +22,8 @@ h="$root/harnesses/selftest-m3-libafl-target"
 [[ -f "$kit/worktrees/selftest-m3-libafl/build-kit/qemu-system-aarch64" ]] ||
   "$kit/scripts/new-soc.sh" selftest-m3-libafl --base libafl
 "$kit/scripts/build.sh" selftest-m3-libafl >/dev/null
+# soc2qemu's fixture is a build product (gitignored there); its profile needs one bring-up run.
+make -s -C "$kit/tests/fixture-m3"
 [[ -d "$kit/socs/selftest-m3-libafl/bringup/runs" ]] ||
   "$kit/scripts/bringup-run.py" selftest-m3-libafl --label selftest >/dev/null || true
 "$kit/scripts/fuzz-profile.py" selftest-m3-libafl >/dev/null
