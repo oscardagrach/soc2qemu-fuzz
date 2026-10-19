@@ -1,0 +1,4 @@
+fuzzer/src/main.rs is adapted from LibAFL's
+fuzzers/full_system/qemu_baremetal/src/fuzzer_low_level.rs (LibAFL 0.16.1,
+https://github.com/AFLplusplus/LibAFL), licensed under Apache-2.0 OR MIT,
+Copyright the LibAFL authors.

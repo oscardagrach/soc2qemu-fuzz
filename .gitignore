@@ -1,0 +1,3 @@
+target/
+harnesses/
+targets/*/target.elf

@@ -4,7 +4,7 @@ Fuzz firmware on SoCs ported with [soc2qemu](https://github.com/oscardagrach/soc
 libafl_qemu in full-system mode. soc2qemu does the port; this project turns a port plus its
 `fuzz/profile.yaml` into a running fuzzer.
 
-Status: sketch. Facts about LibAFL below were checked against LibAFL `main` on 2026-10-18;
+Status: milestone 1 done; the rest is a sketch. Facts about LibAFL below were checked against LibAFL `main` on 2026-10-18;
 everything marked **open** is unverified.
 
 ## Inputs
@@ -56,10 +56,26 @@ features):
 
 ## Milestones
 
-1. Fuzz soc2qemu's `selftest-m3` fixture in buffer mode. It's the same board as LibAFL's
-   bare-metal example, so it isolates our generation logic from board problems.
+1. **Done (2026-10-18).** Buffer-mode fuzzing on mps2-an385 (`selftest.sh`): soc2qemu's
+   `selftest-m3-libafl` port + `targets/selftest-m3-buffer` (planted "SOC!" bug). The bug is
+   found in about 13 s / ~100k executions at ~7.4k exec/s on one core. A buffer-mode target
+   is used instead of soc2qemu's own fixture because that one has no input to fuzz.
 2. MMIO mode on the same fixture: fuzz the `i2s +0x4` register the fixture polls.
 3. A real Cortex-M port, then a Cortex-A port (`aarch64` feature).
+
+## Implementation notes (milestone 1)
+
+- One generic fuzzer (`fuzzer/`) driven by a generated `harness.toml`, rather than generated
+  Rust per SoC. One build per QEMU tree and architecture (`target/<tree>-<arch>/`).
+- libafl_qemu builds QEMU in `<LIBAFL_QEMU_DIR>/build`; soc2qemu builds libafl-based ports in
+  `build-kit/` so the two don't collide.
+- libafl_qemu forces `--enable-fdt=internal` and takes no extra configure flags. QEMU 10.2's
+  bundled dtc and one unit test fail under GCC 16 `-Werror`, so `fuzz.sh` sets CC/CXX to
+  `tools/cc-compat`, which downgrades exactly those two warnings.
+- Crash = any stop other than the end breakpoint (crash handlers are breakpoints too).
+  Timed runs must SIGINT only the broker: killing QEMU mid-input records a bogus crash.
+  The broker leaves its client running after SIGINT, so `fuzz.sh` SIGKILLs the session.
+- Crashes are not deduplicated yet (one planted bug gives many files).
 
 ## Open questions
 
