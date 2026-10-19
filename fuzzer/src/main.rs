@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! Buffer-mode full-system fuzzer for soc2qemu ports, driven by a generated harness.toml.
 //!
 //! Snapshot at `target.start`, write each input to `target.input`, run until `target.end`
@@ -12,7 +13,7 @@
 //!                                                      <harness dir>/crashes-unique/
 //!
 //! Fuzzing loop adapted from LibAFL's `fuzzers/full_system/qemu_baremetal/src/fuzzer_low_level.rs`
-//! (LibAFL 0.16.1, licensed Apache-2.0 OR MIT).
+//! (LibAFL 0.16.1, Apache-2.0 OR MIT; used under MIT, see NOTICE).
 use core::time::Duration;
 use std::{collections::BTreeMap, env, fs, path::PathBuf, process};
 

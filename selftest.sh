@@ -1,11 +1,21 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
 # Acceptance check: fuzz the buffer-mode target on soc2qemu's selftest-m3-libafl port. Both
 # planted bugs ("SOC!" UNDEFINSTR, "BAD!" INVSTATE) must be found, deduplicated to exactly one
 # saved crash each, and confirmed by --triage; nothing else may be reported.
-#   ./selftest.sh [path/to/soc2qemu] [seconds]
+#   ./selftest.sh [path/to/soc2qemu] [seconds]   (default: ../soc2qemu or ../qemu, 180 s)
 set -euo pipefail
 root="$(cd "$(dirname "$0")" && pwd)"
-kit="${1:-$root/../qemu}"; secs="${2:-180}"
+secs="${2:-180}"
+# soc2qemu checkout: the argument, else a sibling directory named soc2qemu (a GitHub clone) or qemu.
+kit="${1:-}"
+if [[ -z "$kit" ]]; then
+  for d in "$root/../soc2qemu" "$root/../qemu"; do
+    [[ -x "$d/scripts/new-soc.sh" ]] && { kit="$(cd "$d" && pwd)"; break; }
+  done
+fi
+[[ -n "$kit" && -x "$kit/scripts/new-soc.sh" ]] ||
+  { echo "usage: selftest.sh <path/to/soc2qemu> [seconds] (no soc2qemu checkout found next to this repo)" >&2; exit 2; }
 profile="$kit/socs/selftest-m3-libafl/fuzz/profile.yaml"
 h="$root/harnesses/selftest-m3-libafl-target"
 

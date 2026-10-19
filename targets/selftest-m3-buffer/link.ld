@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
 MEMORY { FLASH (rx) : ORIGIN = 0x0, LENGTH = 4M  RAM (rwx) : ORIGIN = 0x20000000, LENGTH = 4M }
 SECTIONS {
   .text : { KEEP(*(.vectors)) *(.text*) *(.rodata*) } > FLASH

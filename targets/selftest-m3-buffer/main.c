@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
 /*
  * Buffer-mode fuzz target for mps2-an385 (the board of soc2qemu's selftest-m3).
  * The harness snapshots at main, writes each input into FUZZ_INPUT, and runs until

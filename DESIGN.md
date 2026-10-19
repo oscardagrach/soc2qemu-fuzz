@@ -4,7 +4,7 @@ Fuzz firmware on SoCs ported with [soc2qemu](https://github.com/oscardagrach/soc
 libafl_qemu in full-system mode. soc2qemu does the port; this project turns a port plus its
 `fuzz/profile.yaml` into a running fuzzer.
 
-Status: milestone 1 done; the rest is a sketch. Facts about LibAFL below were checked against LibAFL `main` on 2026-10-18;
+Status: milestone 1 done; the rest is a sketch. Facts about LibAFL below were checked against LibAFL 0.16.1 (and `main`) on 2026-10-18;
 everything marked **open** is unverified.
 
 ## Inputs
@@ -95,5 +95,3 @@ features):
 - Cortex-A with a firmware chain: snapshot after DDR init and the MMU is on; TrustZone/EL3 state
   in snapshots.
 - Keeping `QEMU_LIBAFL_REF` in soc2qemu in step with the LibAFL release this project pins.
-- License: decide before publishing (soc2qemu is GPL-3.0-only + commercial; LibAFL is
-  Apache-2.0/MIT).

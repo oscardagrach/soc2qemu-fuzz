@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
 # Build the fuzzer against a harness's QEMU tree, or run it.
 #   ./fuzz.sh build <harness-dir>
 #   ./fuzz.sh run   <harness-dir> [seconds]    (default: until Ctrl-C; crashes land in <harness-dir>/crashes)

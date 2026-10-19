@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
 # Compiler wrapper for libafl_qemu's QEMU build (fuzz.sh sets CC/CXX to these).
 # qemu-libafl-bridge is QEMU 10.2.0 and builds its bundled dtc 1.6.1 (libafl_qemu forces
 # --enable-fdt=internal); both predate this toolchain (GCC 16), whose new diagnostics they
