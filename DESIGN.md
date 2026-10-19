@@ -75,7 +75,19 @@ features):
 - Crash = any stop other than the end breakpoint (crash handlers are breakpoints too).
   Timed runs must SIGINT only the broker: killing QEMU mid-input records a bogus crash.
   The broker leaves its client running after SIGINT, so `fuzz.sh` SIGKILLs the session.
-- Crashes are not deduplicated yet (one planted bug gives many files).
+- Crash dedup: the harness writes a signature hash to a `ValueObserver`, and the objective is
+  `(Crash or Timeout) and NewHashFeedback`, so only unseen signatures are saved. Cortex-M
+  signature = stacked PC (exception frame at SP+24, read through the CPU so the System Control
+  Space is visible) + CFSR. Faults taken on PSP only get the CFSR, because libafl_qemu 0.16.1
+  doesn't expose PSP. The seen-set lives in each client's state, so with several cores each
+  client saves its own first copy. Fast snapshot restore resets CFSR between inputs.
+  `--triage` applies the same signature by replay.
+
+## Next
+
+- Cortex-A signatures (ELR/ESR) with the Cortex-A milestone; PSP for Cortex-M RTOS faults.
+- Crash minimization (saved inputs are whatever the mutator produced, e.g. 59-72 bytes for a
+  4-byte trigger).
 
 ## Open questions
 

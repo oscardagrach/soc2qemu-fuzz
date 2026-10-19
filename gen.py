@@ -156,6 +156,7 @@ def main():
 # profile: {a.profile.resolve()}
 # elf:     {syms.path}
 soc = "{prof['soc']}"
+profile = "{prof.get('profile') or ''}"  # soc2qemu spec profile; "m" enables Cortex-M fault signatures
 arch = "{arch}"
 qemu_dir = "{tree}"
 qemu_args = {toml_list(qemu_args)}

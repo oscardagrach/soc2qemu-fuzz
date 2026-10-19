@@ -18,14 +18,19 @@ Early stage: buffer-mode fuzzing works on Cortex-M; see [DESIGN.md](DESIGN.md) f
 ./fuzz.sh build harnesses/<soc>-<elf>     # first build compiles QEMU from the port tree (~1 min)
 ./fuzz.sh run   harnesses/<soc>-<elf> [seconds]
 target/<tree>-<arch>/release/soc2qemu-fuzz harnesses/<soc>-<elf>/harness.toml --replay <input>
+target/<tree>-<arch>/release/soc2qemu-fuzz harnesses/<soc>-<elf>/harness.toml --triage <dir>
 ```
 
 `gen.py` takes the snapshot point, end point, input buffer and crash handlers from the
 profile's `targets`, from `--start/--end/--input/--crash`, or from conventional symbol names
 (`main`, `fuzz_end`/`BREAKPOINT`, `FUZZ_INPUT`, `fault_handler`/`HardFault_Handler`).
-Crashing inputs land in `harnesses/<name>/crashes/` (not deduplicated); use `--replay` to
-check how an input stops.
+Crashes are deduplicated while fuzzing: `harnesses/<name>/crashes/` gets the first input for
+each crash signature. On Cortex-M the signature is the faulting PC from the exception frame
+plus the fault status register (CFSR); elsewhere it's the PC where execution stopped.
+`--replay` shows one input's signature; `--triage <dir>` groups any directory of crashing
+inputs by signature and copies the smallest of each to `crashes-unique/`.
 
 ## Self-test
-`./selftest.sh [path/to/soc2qemu] [seconds]` fuzzes `targets/selftest-m3-buffer` (a planted
-"SOC!" bug on mps2-an385) on soc2qemu's `selftest-m3-libafl` port and checks the result.
+`./selftest.sh [path/to/soc2qemu] [seconds]` (default 180 s) fuzzes `targets/selftest-m3-buffer`
+on soc2qemu's `selftest-m3-libafl` port (mps2-an385). It has two planted bugs with different
+fault types; the check passes when each is saved exactly once and `--triage` agrees.
