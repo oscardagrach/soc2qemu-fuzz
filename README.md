@@ -26,6 +26,9 @@ target/<tree>-<arch>/release/soc2qemu-fuzz harnesses/<soc>-<elf>/harness.toml --
 target/<tree>-<arch>/release/soc2qemu-fuzz harnesses/<soc>-<elf>/harness.toml --triage <dir>
 ```
 
+Environment: `CORES` (LibAFL core list, default `1`, e.g. `0-7`) and `BROKER_PORT` (default
+1338; give each concurrently running fuzzer its own).
+
 `gen.py` takes the snapshot point, end point, input buffer and crash handlers from the
 profile's `targets`, from `--start/--end/--input/--crash`, or from conventional symbol names
 (`main`, `fuzz_end`/`BREAKPOINT`, `FUZZ_INPUT`, `fault_handler`/`HardFault_Handler`).
